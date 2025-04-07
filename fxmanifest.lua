@@ -3,11 +3,13 @@ game 'gta5'
 
 author 'Thorough'
 description 'Vehicle Pack Scanner for ESX'
-version '1.0.0'
+github 'https://github.com/OsoThoro/ThoroVsManager'
 
-server_script {
-    'server.lua',
-    'config.lua'
-}
+lua54 'yes'
 
-shared_script 'locales/en.lua'
+shared_script 'config.lua'
+
+server_script 'server.lua'
+client_script 'client.lua'
+
+dependency 'oxmysql'
