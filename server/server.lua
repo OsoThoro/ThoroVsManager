@@ -3,57 +3,73 @@ local MySQL = exports.oxmysql  -- Ensure oxmysql is being used correctly
 -- Load the config
 Config = require('config')
 
--- Function to scan all configured vehicle packs
-local function scanAllVehiclePacks()
-    -- Loop through all configured vehicle packs and scan each one
-    for _, vehiclePack in ipairs(Config.VehiclePacks) do
-        local resourceName = vehiclePack.resourceName
-        local resourceLocation = vehiclePack.resourceLocation
+-- Server-side: vehicle scanning and database insertion logic
+local function scanAndImportVehiclePack(vehicleResource)
+    -- Get the list of stream and meta files for the resource
+    local resourceDir = GetResourcePath(vehicleResource)
+    local streamFiles = GetResourceFileNames(vehicleResource, "stream")
+    local metaFiles = GetResourceFileNames(vehicleResource, "meta")
 
-        -- Trigger the scan for each vehicle pack (use the scanVehiclePack function from earlier)
-        print("Starting scan for vehicle pack: " .. resourceName)
-
-        -- Trigger the scanning process
-        scanVehiclePack(resourceName)
-
-        -- Optionally, print out or log the location of the vehicle pack
-        print("Scanning location: " .. resourceLocation)
+    -- Scan the meta files for vehicle information
+    for _, metaFile in ipairs(metaFiles) do
+        local filePath = resourceDir .. '/' .. metaFile
+        local vehicleData = ParseVehicleMeta(filePath)
+        
+        if vehicleData then
+            local category = vehicleData.category
+            local name = vehicleData.name
+            local model = vehicleData.model
+            local price = vehicleData.price or generateRandomPrice(category)
+            
+            -- Insert or update vehicle in database
+            exports.oxmysql:execute([[
+                INSERT INTO vehicles (name, model, price, category)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    price = VALUES(price),
+                    category = VALUES(category)
+            ]], {name, model, price, category})
+            
+            -- Insert category if not exists
+            exports.oxmysql:execute([[
+                INSERT IGNORE INTO vehicle_categories (name, label)
+                VALUES (?, ?)
+            ]], {category, category:match("([%a]+)")})
+        end
     end
 end
 
--- Automatically scan the vehicle packs if enabled in the config
-if Config.EnableScanOnStart then
-    Citizen.CreateThread(function()
-        scanAllVehiclePacks()
-    end)
+-- Helper function to generate random but realistic prices
+local function generateRandomPrice(category)
+    local basePrice = 20000
+    local priceMultiplier = {
+        compact = 1.2,
+        coupe = 1.5,
+        sedan = 1.3,
+        sports = 2.5,
+        sportsclassic = 3,
+        super = 5,
+        muscle = 2,
+        offroad = 1.8,
+        suv = 2.2,
+        van = 1.5,
+        motorcycle = 1.7
+    }
+    local multiplier = priceMultiplier[category:lower()] or 1
+    return math.random(basePrice * multiplier, basePrice * multiplier * 2)
 end
 
--- Register the /scanvehicles command (manual trigger)
-RegisterCommand('scanvehicles', function(source, args, rawCommand)
-    -- Check if the player has permission (optional, only allow admins to run this command)
-    local player = source
-    if IsPlayerAceAllowed(player, "admin") then
-        -- Notify the player that the scan has started
-        TriggerClientEvent('chat:addMessage', player, {
-            args = { '^2[Vehicle Scanner]', 'Scanning vehicle pack. Please wait...' }
-        })
-        
-        -- Trigger the scanAllVehiclePacks function
-        Citizen.CreateThread(function()
-            scanAllVehiclePacks()
-
-            -- Notify the player when the scan is complete
-            TriggerClientEvent('chat:addMessage', player, {
-                args = { '^2[Vehicle Scanner]', 'Vehicle scan complete!' }
-            })
-        end)
+-- Function to handle the actual scanning
+RegisterCommand('scanvehicles', function(source)
+    local vehicleResource = Config.VehicleResource
+    if vehicleResource then
+        scanAndImportVehiclePack(vehicleResource)
+        TriggerClientEvent('vehiclePackScanner:notify', source, 'Vehicle pack scanning completed successfully!')
     else
-        -- Notify the player they don't have permission
-        TriggerClientEvent('chat:addMessage', player, {
-            args = { '^1[Vehicle Scanner]', 'You do not have permission to run this command.' }
-        })
+        TriggerClientEvent('vehiclePackScanner:notify', source, 'No vehicle resource configured.')
     end
 end, false)
+
 
 
 -- Utility function to capitalize strings (for category labels, etc.)
