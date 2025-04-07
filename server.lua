@@ -1,24 +1,60 @@
 local MySQL = exports.oxmysql  -- Ensure oxmysql is being used correctly
 
--- Function to scan a vehicle pack resource for all .meta files
-function scanVehiclePack(resourceName)
-    -- Step 1: Get the path to the resource
-    local resourceFolder = GetResourcePath(resourceName)
+-- Load the config
+Config = require('config')
 
-    -- Step 2: Get all .meta files in the resource folder
-    local metaFiles = getMetaFiles(resourceFolder)
+-- Function to scan all configured vehicle packs
+local function scanAllVehiclePacks()
+    -- Loop through all configured vehicle packs and scan each one
+    for _, vehiclePack in ipairs(Config.VehiclePacks) do
+        local resourceName = vehiclePack.resourceName
+        local resourceLocation = vehiclePack.resourceLocation
 
-    -- Step 3: Loop through each meta file and extract the vehicle data
-    for _, file in ipairs(metaFiles) do
-        -- Extract vehicle data from the .meta file
-        local vehicleData = extractVehicleData(file)
-        
-        -- If valid vehicle data is extracted, check and insert into the database
-        if vehicleData then
-            checkIfVehicleExists(vehicleData)
-        end
+        -- Trigger the scan for each vehicle pack (use the scanVehiclePack function from earlier)
+        print("Starting scan for vehicle pack: " .. resourceName)
+
+        -- Trigger the scanning process
+        scanVehiclePack(resourceName)
+
+        -- Optionally, print out or log the location of the vehicle pack
+        print("Scanning location: " .. resourceLocation)
     end
 end
+
+-- Automatically scan the vehicle packs if enabled in the config
+if Config.EnableScanOnStart then
+    Citizen.CreateThread(function()
+        scanAllVehiclePacks()
+    end)
+end
+
+-- Register the /scanvehicles command (manual trigger)
+RegisterCommand('scanvehicles', function(source, args, rawCommand)
+    -- Check if the player has permission (optional, only allow admins to run this command)
+    local player = source
+    if IsPlayerAceAllowed(player, "admin") then
+        -- Notify the player that the scan has started
+        TriggerClientEvent('chat:addMessage', player, {
+            args = { '^2[Vehicle Scanner]', 'Scanning vehicle pack. Please wait...' }
+        })
+        
+        -- Trigger the scanAllVehiclePacks function
+        Citizen.CreateThread(function()
+            scanAllVehiclePacks()
+
+            -- Notify the player when the scan is complete
+            TriggerClientEvent('chat:addMessage', player, {
+                args = { '^2[Vehicle Scanner]', 'Vehicle scan complete!' }
+            })
+        end)
+    else
+        -- Notify the player they don't have permission
+        TriggerClientEvent('chat:addMessage', player, {
+            args = { '^1[Vehicle Scanner]', 'You do not have permission to run this command.' }
+        })
+    end
+end, false)
+
 
 -- Utility function to capitalize strings (for category labels, etc.)
 function string:capitalize()
