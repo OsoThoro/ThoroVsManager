@@ -16,8 +16,8 @@ You can configure the resource by editing the `config.lua` file. The following o
 - `Config.VehiclePackPath` - Path to the vehicle pack folder.
 
 ## Installation
-1. Place the `vehicle-pack-scanner` folder in your `resources` folder.
-2. Add `start vehicle-pack-scanner` to your `server.cfg`.
+1. Place the `ThoroVsManager` folder in your `resources` folder.
+2. Add `start ThoroVsManager` to your `server.cfg`.
 3. Configure the `config.lua` file.
 4. Ensure `oxmysql` is installed for database support.
 
