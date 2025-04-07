@@ -78,9 +78,87 @@ function extractVehicleData(file)
 end
 
 -- Helper function to get .meta files in the vehicle pack (custom implementation)
+-- Function to scan the resource directory and get a list of .meta files
 function getMetaFiles(path)
-    -- Custom logic to scan the directory and return a list of meta files
-    -- This could be achieved through the file system API or any specific method you're using to get files in a resource
+    local files = {}
+    
+    -- Attempt to read the directory contents (this requires a method to read files, let's use fs for simplicity)
+    local resourceFolder = path
+    local directory = GetDirFiles(resourceFolder)  -- Assuming GetDirFiles can list files in a resource
 
-    return {}  -- Example return; this needs to scan and return actual file paths or file objects
+    for _, file in ipairs(directory) do
+        -- Only add .meta files to our list
+        if file:match("%.meta$") then
+            table.insert(files, file)
+        end
+    end
+
+    return files
+end
+
+-- Function to extract vehicle data from a .meta file
+function extractVehicleData(file)
+    -- Placeholder example for parsing a file, assuming it's in a readable format
+    local vehicle = {}
+
+    -- You could use a specific Lua XML parser if the .meta files are XML or JSON parsers if it's JSON
+    -- For this example, let's pretend the .meta file is a simple Lua table-like structure
+
+    -- Open the file and read its content (this will need to adapt based on your actual file format)
+    local content = LoadResourceFile("your_resource", file)  -- Load the file contents from the resource folder
+
+    if content then
+        -- Parse the content (simple example assuming Lua format)
+        local vehicleData = load("return " .. content)()
+
+        -- Populate vehicle details
+        vehicle.name = vehicleData.name or "Unknown"
+        vehicle.model = vehicleData.model or "Unknown"
+        vehicle.category = vehicleData.category or "misc"  -- Default to 'misc' if no category
+        vehicle.price = vehicleData.price  -- We can set this later if needed
+
+        -- Generate a random price if it's missing
+        if not vehicle.price then
+            vehicle.price = math.random(Config.PriceRange.min, Config.PriceRange.max)
+        end
+    end
+
+    return vehicle
+end
+
+-- Function to check if vehicle already exists in the database and insert if not
+function checkIfVehicleExists(vehicle)
+    MySQL.query('SELECT * FROM vehicles WHERE model = ?', { vehicle.model }, function(result)
+        if #result == 0 then
+            -- If the vehicle doesn't exist, insert the category and the vehicle
+            insertVehicleCategory(vehicle.category)
+            insertVehicleData(vehicle)
+        else
+            print("Vehicle already exists: " .. vehicle.model)
+        end
+    end)
+end
+
+-- Function to insert vehicle category into `vehicle_categories`
+function insertVehicleCategory(category)
+    MySQL.query('SELECT * FROM vehicle_categories WHERE name = ?', { category }, function(result)
+        if #result == 0 then
+            -- Insert category if it doesn't exist
+            MySQL.query('INSERT INTO vehicle_categories (name, label) VALUES (?, ?)', { category, category:capitalize() })
+            print("Inserted new category: " .. category)
+        end
+    end)
+end
+
+-- Function to insert vehicle data into the `vehicles` table
+function insertVehicleData(vehicle)
+    MySQL.query('INSERT INTO vehicles (name, model, price, category) VALUES (?, ?, ?, ?)', {
+        vehicle.name, vehicle.model, vehicle.price, vehicle.category
+    }, function(affectedRows)
+        if affectedRows > 0 then
+            print("Inserted new vehicle: " .. vehicle.name)
+        else
+            print("Failed to insert vehicle: " .. vehicle.name)
+        end
+    end)
 end
