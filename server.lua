@@ -1,92 +1,60 @@
-local MySQL = require('oxmysql')
+-- Server-side logic for scanning vehicle packs and importing data into the database
 
--- Scan the resource folder for vehicle packs
-function scanVehiclePackResource(resourcePath)
-    local vehicleCategoryMappings = {
-        ['compacts'] = 'Compacts',
-        ['coupes'] = 'Coupés',
-        ['sedans'] = 'Sedans',
-        ['sports'] = 'Sports',
-        ['sportsclassics'] = 'Sports Classics',
-        ['super'] = 'Super',
-        ['muscle'] = 'Muscle',
-        ['offroad'] = 'Off Road',
-        ['suvs'] = 'SUVs',
-        ['vans'] = 'Vans',
-        ['motorcycles'] = 'Motos'
-    }
+local MySQL = require('oxmysql')  -- Using oxmysql
 
+-- Function to scan a vehicle pack resource for .meta files
+function scanVehiclePack(resourceName)
     local vehicles = {}
 
-    -- Scan the stream and meta files within the resource
-    local metaFiles = GetMetaFiles(resourcePath) -- A function that will fetch all the meta files
-    for _, metaFile in ipairs(metaFiles) do
-        local vehicleData = ParseVehicleMetaFile(metaFile) -- Function that parses the meta file
+    -- Get the resource folder path (configurable in config.lua)
+    local resourcePath = Config.VehiclePackPath .. resourceName .. '/stream/'
 
-        if vehicleData then
-            -- Default category if not found
-            local category = vehicleCategoryMappings[vehicleData.category] or 'Other'
-            local price = vehicleData.price or GenerateRandomPrice(category)
+    -- Example of scanning .meta files in the resource folder (customize as needed)
+    local metaFiles = getMetaFiles(resourcePath)  -- This function needs to be implemented
 
-            -- Prepare the data for insertion
-            table.insert(vehicles, {
-                name = vehicleData.name,
-                model = vehicleData.model,
-                price = price,
-                category = category
-            })
+    for _, file in ipairs(metaFiles) do
+        local vehicle = extractVehicleData(file)  -- Custom function to parse .meta files
+        if vehicle then
+            -- Generate a random price if not provided
+            if not vehicle.price and Config.GeneratePricesIfMissing then
+                vehicle.price = math.random(Config.PriceRange.min, Config.PriceRange.max)
+            end
+
+            -- Insert vehicle category if not already in the database
+            insertVehicleCategory(vehicle.category)
+
+            -- Insert vehicle data into the database
+            insertVehicleData(vehicle)
         end
     end
-
-    return vehicles
 end
 
--- Function to fetch all meta files in a directory
-function GetMetaFiles(directory)
-    -- Implement file scanning logic here
-    -- For example, using a glob pattern to find all .meta files
-    return {}
+-- Function to insert a vehicle into the `vehicle_categories` table
+function insertVehicleCategory(category)
+    MySQL.query('SELECT * FROM vehicle_categories WHERE name = ?', { category }, function(result)
+        if #result == 0 then
+            MySQL.query('INSERT INTO vehicle_categories (name, label) VALUES (?, ?)', { category, category:capitalize() })
+        end
+    end)
 end
 
--- Function to parse vehicle meta file and extract data
-function ParseVehicleMetaFile(filePath)
-    -- Implement logic for parsing XML meta files to extract vehicle data
-    -- Example: Extract model, name, category, and price
-    return {
-        name = 'ExampleVehicle',
-        model = 'example_model',
-        category = 'sports',  -- For instance
-        price = nil  -- Assuming price is not provided
-    }
+-- Function to insert vehicle data into the `vehicles` table
+function insertVehicleData(vehicle)
+    MySQL.query('INSERT INTO vehicles (name, model, price, category) VALUES (?, ?, ?, ?)', {
+        vehicle.name, vehicle.model, vehicle.price, vehicle.category
+    })
 end
 
--- Generate a random but realistic price based on category
-function GenerateRandomPrice(category)
-    local priceRange = Config.VehiclePriceRange[category]
-    if priceRange then
-        return math.random(priceRange.min, priceRange.max)
-    else
-        return math.random(15000, 50000) -- Default price range
-    end
-end
+-- Function to extract vehicle data from a .meta file
+function extractVehicleData(file)
+    -- Parsing logic to extract vehicle name, model, category, and price
+    -- You may need to adjust this depending on the structure of the .meta files
 
--- Insert vehicles into the database
-function InsertVehiclesToDatabase(vehicles)
-    for _, vehicle in ipairs(vehicles) do
-        local query = string.format(
-            "INSERT INTO vehicles (name, model, price, category) VALUES ('%s', '%s', %d, '%s')",
-            vehicle.name, vehicle.model, vehicle.price, vehicle.category
-        )
-        
-        -- Execute MySQL query (using oxmysql)
-        MySQL.query(query)
-    end
-end
+    local vehicle = {}
+    vehicle.name = file.name or "Unknown"
+    vehicle.model = file.model or "Unknown"
+    vehicle.category = file.category or "misc"  -- Default category if not specified
+    vehicle.price = file.price  -- Price might be undefined, will generate if missing
 
--- Example function that runs when the resource starts
-AddEventHandler('onResourceStart', function(resourceName)
-    if resourceName == GetCurrentResourceName() then
-        local vehicles = scanVehiclePackResource('resources/vehicles') -- Provide the actual path
-        InsertVehiclesToDatabase(vehicles)
-    end
-end)
+    return vehicle
+end
