@@ -1,23 +1,30 @@
 local MySQL = exports.oxmysql  -- Ensure oxmysql is being used correctly
 
--- Function to scan a vehicle pack resource for .meta files
+-- Function to scan a vehicle pack resource for all .meta files
 function scanVehiclePack(resourceName)
-    local vehicles = {}
+    -- Step 1: Get the path to the resource
+    local resourceFolder = GetResourcePath(resourceName)
 
-    -- Get the resource folder path
-    local resourcePath = Config.VehiclePackPath .. resourceName .. '/stream/'
+    -- Step 2: Get all .meta files in the resource folder
+    local metaFiles = getMetaFiles(resourceFolder)
 
-    -- Example of scanning .meta files (this part can be customized based on your file structure)
-    local metaFiles = getMetaFiles(resourcePath)  -- Function that gets the list of meta files in the resource
-
+    -- Step 3: Loop through each meta file and extract the vehicle data
     for _, file in ipairs(metaFiles) do
-        local vehicle = extractVehicleData(file)  -- Custom function to parse .meta files
-        if vehicle then
-            -- Check if vehicle already exists in the database
-            checkIfVehicleExists(vehicle)
+        -- Extract vehicle data from the .meta file
+        local vehicleData = extractVehicleData(file)
+        
+        -- If valid vehicle data is extracted, check and insert into the database
+        if vehicleData then
+            checkIfVehicleExists(vehicleData)
         end
     end
 end
+
+-- Utility function to capitalize strings (for category labels, etc.)
+function string:capitalize()
+    return (self:gsub("^%l", string.upper))
+end
+
 
 -- Function to check if the vehicle already exists in the database
 function checkIfVehicleExists(vehicle)
@@ -34,6 +41,7 @@ function checkIfVehicleExists(vehicle)
     end)
 end
 
+
 -- Function to insert vehicle category into the `vehicle_categories` table
 function insertVehicleCategory(category)
     MySQL.query('SELECT * FROM vehicle_categories WHERE name = ?', { category }, function(result)
@@ -44,6 +52,7 @@ function insertVehicleCategory(category)
         end
     end)
 end
+
 
 -- Function to insert vehicle data into the `vehicles` table
 function insertVehicleData(vehicle)
@@ -57,6 +66,7 @@ function insertVehicleData(vehicle)
         end
     end)
 end
+
 
 -- Function to extract vehicle data from a .meta file
 function extractVehicleData(file)
@@ -77,7 +87,7 @@ function extractVehicleData(file)
     return vehicle
 end
 
--- Helper function to get .meta files in the vehicle pack (custom implementation)
+
 -- Function to scan the resource directory and get a list of .meta files
 function getMetaFiles(path)
     local files = {}
@@ -95,6 +105,7 @@ function getMetaFiles(path)
 
     return files
 end
+
 
 -- Function to extract vehicle data from a .meta file
 function extractVehicleData(file)
@@ -126,6 +137,7 @@ function extractVehicleData(file)
     return vehicle
 end
 
+
 -- Function to check if vehicle already exists in the database and insert if not
 function checkIfVehicleExists(vehicle)
     MySQL.query('SELECT * FROM vehicles WHERE model = ?', { vehicle.model }, function(result)
@@ -139,6 +151,7 @@ function checkIfVehicleExists(vehicle)
     end)
 end
 
+
 -- Function to insert vehicle category into `vehicle_categories`
 function insertVehicleCategory(category)
     MySQL.query('SELECT * FROM vehicle_categories WHERE name = ?', { category }, function(result)
@@ -149,6 +162,7 @@ function insertVehicleCategory(category)
         end
     end)
 end
+
 
 -- Function to insert vehicle data into the `vehicles` table
 function insertVehicleData(vehicle)
